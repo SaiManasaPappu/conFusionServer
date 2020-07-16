@@ -25,6 +25,10 @@ connect.then((db) => {
 }, (err) => { console.log(err); });
 var app = express();
 
+// signed cookie
+// string supplied is a secret_key_for_cookie_parser_encryption
+app.use(cookieParser('12345-67890-09876-54321'));
+
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
@@ -35,26 +39,41 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 function auth (req, res, next) {
-  console.log(req.headers);
-  var authHeader = req.headers.authorization;
-  if (!authHeader) {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');
-      err.status = 401;
-      next(err);
-      return;
-  }
 
-  var auth = new Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
-  var user = auth[0];
-  var pass = auth[1];
-  if (user == 'admin' && pass == 'password') {
-      next(); // authorized
-  } else {
-      var err = new Error('You are not authenticated!');
-      res.setHeader('WWW-Authenticate', 'Basic');      
-      err.status = 401;
-      next(err);
+  console.log(req.signedCookies);
+
+  if (!req.signedCookies.user) {
+    var authHeader = req.headers.authorization;
+    if (!authHeader) {
+        var err = new Error('You are not authenticated!');
+        res.setHeader('WWW-Authenticate', 'Basic');              
+        err.status = 401;
+        next(err);
+        return;
+    }
+    var auth = new Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
+    var user = auth[0];
+    var pass = auth[1];
+    if (user == 'admin' && pass == 'password') {
+        res.cookie('user','admin',{signed: true});
+        next(); // authorized
+    } 
+    else {
+        var err = new Error('You are not authenticated!');
+        res.setHeader('WWW-Authenticate', 'Basic');              
+        err.status = 401;
+        next(err);
+    }
+  }
+  else {
+      if (req.signedCookies.user === 'admin') {
+          next();
+      }
+      else {
+          var err = new Error('You are not authenticated!');
+          err.status = 401;
+          next(err);
+      }
   }
 }
 
